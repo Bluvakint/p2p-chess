@@ -116,9 +116,13 @@ export function initBoardClickHandler(onSquareClick) {
     dom.board.addEventListener('touchstart', (e) => {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl || e.touches.length !== 1) return;
+        
+        // ВАЖНО: предотвращаем скролл сразу при касании фигуры
+        e.preventDefault();
+        
         const touch = e.touches[0];
         pointerStart = { x: touch.clientX, y: touch.clientY, pieceEl };
-    }, { passive: true });
+    }, { passive: false }); // <-- passive: false обязательно для preventDefault
     
     document.addEventListener('touchmove', (e) => {
         if (!pointerStart || e.touches.length !== 1) return;
@@ -132,11 +136,11 @@ export function initBoardClickHandler(onSquareClick) {
         }
         
         if (dragState) {
-            e.preventDefault();
+            e.preventDefault(); // <-- Блокируем скролл во время drag
             moveDrag(touch.clientX, touch.clientY);
         }
     }, { passive: false });
-    
+        
     document.addEventListener('touchend', (e) => {
         if (pointerStart && !dragState) {
             const square = pointerStart.pieceEl.closest('.square');
