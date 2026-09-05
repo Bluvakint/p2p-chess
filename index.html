@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Шахматы</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>♟ P2P Шахматы</h1>
+            <div class="subtitle">Играй напрямую с другом, без серверов</div>
+        </header>
+
+        <!-- SETUP SCREEN -->
+        <div id="setup-screen" class="setup-screen">
+            <div class="setup-title" id="setup-title">🎮 Ожидание подключения...</div>
+            
+            <div class="setup-section">
+                <label class="setup-label">
+                    Цвет мастера комнаты
+                    <span class="read-only-hint hidden" id="color-hint">настраивает мастер</span>
+                </label>
+                <div class="option-group" id="color-options" data-group="color">
+                    <button class="option-btn selected" data-value="white">♔ Белые</button>
+                    <button class="option-btn" data-value="black">♚ Чёрные</button>
+                    <button class="option-btn" data-value="random">🎲 Случайно</button>
+                </div>
+            </div>
+
+            <div class="setup-section">
+                <label class="setup-label">
+                    Контроль времени
+                    <span class="read-only-hint hidden" id="time-hint">настраивает мастер</span>
+                </label>
+                <div class="option-group" id="time-options" data-group="time">
+                    <button class="option-btn selected" data-value="0">∞ Без времени</button>
+                    <button class="option-btn" data-value="300">5 мин</button>
+                    <button class="option-btn" data-value="600">10 мин</button>
+                    <button class="option-btn" data-value="900">15 мин</button>
+                    <button class="option-btn" data-value="custom">⏱ Своё</button>
+                </div>
+                <div class="custom-time-input hidden" id="custom-time-input">
+                    <input type="number" id="custom-time-value" min="1" max="180" placeholder="Минуты (1-180)">
+                    <span class="custom-time-label">минут</span>
+                </div>
+            </div>
+
+            <div class="link-box" id="link-box">
+                <input type="text" id="room-link" readonly>
+                <button class="copy-btn" id="copy-link-btn" title="Копировать ссылку">📋</button>
+                <button class="copy-btn" id="show-qr-btn" title="Показать QR-код">📱</button>
+            </div>
+
+            <div class="ready-status hidden" id="ready-status">
+                <div class="ready-item">
+                    <span>👑 Мастер</span>
+                    <span class="ready-badge waiting" id="host-ready-badge">Ожидает</span>
+                </div>
+                <div class="ready-item">
+                    <span>🎮 Соперник</span>
+                    <span class="ready-badge waiting" id="guest-ready-badge">Ожидает</span>
+                </div>
+            </div>
+
+            <button class="ready-btn hidden" id="ready-btn">✅ Готов</button>
+
+            <div class="last-game-section hidden" id="last-game-section">
+                <div class="setup-label">📜 Нотация последней партии</div>
+                <div class="notation-preview" id="last-game-notation"></div>
+                <button class="copy-btn" id="copy-last-game-btn" style="margin-top: 8px; width: 100%;">📋 Копировать нотацию</button>
+            </div>
+
+            <div class="disconnect-warning hidden" id="disconnect-warning">
+                ⚠️ Не закрывайте и не обновляйте страницу во время игры — соединение будет потеряно!
+            </div>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="game-screen" class="game-layout hidden">
+            <div class="game-column">
+                <div class="player-info" id="opponent-info">
+                    <div class="player-left">
+                        <div>
+                            <div class="player-name">
+                                Соперник
+                                <span class="master-badge hidden" id="opponent-master">👑 Мастер</span>
+                            </div>
+                            <div class="player-color">
+                                <div class="color-indicator" id="opponent-color-indicator"></div>
+                                <span id="opponent-color-text">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-badge connected" id="opponent-status">● Онлайн</div>
+                </div>
+
+                <div class="clock hidden" id="clock-top">
+                    <span class="clock-name">Соперник</span>
+                    <span class="clock-time" id="clock-top-time">--:--</span>
+                </div>
+
+                <div id="board"></div>
+
+                <div class="clock hidden" id="clock-bottom">
+                    <span class="clock-name">Ты</span>
+                    <span class="clock-time" id="clock-bottom-time">--:--</span>
+                </div>
+
+                <div class="player-info" id="my-info">
+                    <div class="player-left">
+                        <div>
+                            <div class="player-name">
+                                Ты
+                                <span class="master-badge hidden" id="my-master">👑 Мастер</span>
+                            </div>
+                            <div class="player-color">
+                                <div class="color-indicator" id="my-color-indicator"></div>
+                                <span id="my-color-text">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-badge connected" id="my-status">● Онлайн</div>
+                </div>
+
+                <div class="controls">
+                    <button class="main-btn" id="draw-btn">🤝 Ничья</button>
+                    <button class="main-btn danger" id="resign-btn">🏳️ Сдаться</button>
+                </div>
+
+                <div class="disconnect-warning">
+                    ⚠️ Не закрывайте и не обновляйте страницу — соединение будет потеряно!
+                </div>
+            </div>
+
+            <div class="side-column">
+                <div class="notation-panel">
+                    <div class="notation-header">
+                        <div class="notation-title">📜 Нотация</div>
+                        <button class="copy-btn" id="copy-notation-btn">📋 Копировать</button>
+                    </div>
+                    <div class="notation-list" id="notation-list">
+                        <div class="notation-empty">Ходов пока нет</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal">
+            <div class="modal-icon" id="modal-icon">🏆</div>
+            <div class="modal-title" id="modal-title">Игра окончена</div>
+            <div class="modal-text" id="modal-text">Результат партии</div>
+            <div class="modal-buttons">
+                <button class="main-btn hidden" id="modal-restart-btn">🔄 Новая партия</button>
+                <button class="main-btn hidden" id="modal-wait-btn">⏳ Ожидать мастера</button>
+                <button class="main-btn danger hidden" id="modal-leave-btn">🚪 Выйти</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Внешние библиотеки -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
+    <!-- Наш код (модули) -->
+    <script type="module" src="js/app.js"></script>
+    <!-- Модалка превращения пешки -->
+    <div class="modal-overlay" id="promotion-modal">
+        <div class="modal promotion-modal">
+            <div class="modal-title">Превращение пешки</div>
+            <div class="promotion-options" id="promotion-options">
+                <!-- Кнопки будут сгенерированы через JS -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="qr-modal">
+        <div class="modal" style="max-width: 300px;">
+            <div class="modal-title" style="font-size: 1.5rem;">Отсканируй для входа</div>
+            <div id="qrcode-container" style="display: flex; justify-content: center; margin: 20px 0; padding: 15px; background: #fff; border-radius: 8px;"></div>
+            <button class="main-btn" id="close-qr-btn">Закрыть</button>
+        </div>
+    </div>
+</body>
+</html>
