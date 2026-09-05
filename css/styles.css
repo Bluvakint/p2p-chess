@@ -266,7 +266,7 @@ h1 {
 
 .clock.hidden { display: none; }
 
-/* Board */
+
 #board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
@@ -278,6 +278,7 @@ h1 {
     overflow: hidden;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     margin: 0 auto;
+    touch-action: none;
 }
 
 .square {
