@@ -165,21 +165,29 @@ function startInteraction(pieceEl, x, y, type) {
     state.validMoves = moves;
     renderBoard();
     
-    // Запоминаем начальную позицию
-    pointerStart = { x, y };
+    // ВАЖНО: берём координаты центра фигуры, а не точки касания
+    const pieceRect = pieceEl.getBoundingClientRect();
+    const pieceCenterX = pieceRect.left + pieceRect.width / 2;
+    const pieceCenterY = pieceRect.top + pieceRect.height / 2;
+    
+    // Запоминаем начальную позицию (для определения движения)
+    pointerStart = { x: pieceCenterX, y: pieceCenterY };
     hasMoved = false;
     
     // Подсвечиваем исходную клетку
     const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
     if (sourceEl) sourceEl.classList.add('drag-source');
     
-    // Создаём dragState (floating piece пока скрыт)
+    // Создаём dragState
     dragState = {
         fromSquare,
         pieceType: piece.type,
         pieceColor: piece.color,
         sourceEl,
-        floatingEl: null
+        floatingEl: null,
+        // Сохраняем реальные координаты фигуры для первого отображения
+        pieceCenterX,
+        pieceCenterY
     };
 }
 
@@ -189,8 +197,13 @@ function showFloatingPiece(x, y) {
     const floatingEl = document.createElement('span');
     floatingEl.className = `floating-piece ${dragState.pieceColor === 'w' ? 'white' : 'black'}`;
     floatingEl.textContent = PIECES[dragState.pieceColor][dragState.pieceType];
-    floatingEl.style.left = `${x}px`;
-    floatingEl.style.top = `${y}px`;
+    
+    // Используем сохранённые координаты центра фигуры для первого отображения
+    const startX = dragState.pieceCenterX;
+    const startY = dragState.pieceCenterY;
+    
+    floatingEl.style.left = `${startX}px`;
+    floatingEl.style.top = `${startY}px`;
     document.body.appendChild(floatingEl);
     
     dragState.floatingEl = floatingEl;
