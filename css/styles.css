@@ -279,6 +279,30 @@ h1 {
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     margin: 0 auto;
     touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#board .piece {
+    -webkit-tap-highlight-color: transparent;
+    cursor: grab;
+}
+
+#board.dragging {
+    cursor: grabbing;
+}
+
+.floating-piece {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    font-size: clamp(2.5rem, 7vw, 4rem);
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+    will-change: left, top;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
 
 .square {
