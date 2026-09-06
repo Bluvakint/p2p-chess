@@ -87,8 +87,7 @@ export function showGameOverModal(result, reason, isHost) {
     toggle(dom.modalRestartBtn, isHost);
     toggle(dom.modalWaitBtn, !isHost);
     toggle(dom.modalLeaveBtn, !isHost);
-
-    // ИСПРАВЛЕНИЕ: убираем hidden и добавляем active
+    
     dom.modalOverlay.classList.remove('hidden');
     dom.modalOverlay.classList.add('active');
 }

@@ -4,7 +4,7 @@ import { dom } from './dom.js';
 
 let dragState = null;
 let pointerStart = null;
-const DRAG_THRESHOLD = 5;
+const DRAG_THRESHOLD = 3; // уменьшили с 5 до 3 пикселей
 
 export function renderBoard() {
     const { game, playerColor, selectedSquare, validMoves } = state;
@@ -73,42 +73,64 @@ function findKingSquare(boardState, color) {
     return null;
 }
 
+// ========== Инициализация событий ==========
 export function initBoardClickHandler(onSquareClick) {
-    // --- КЛИК (fallback для пустых клеток и выбора фигуры) ---
+    
+    // --- КЛИК (универсальный fallback) ---
     dom.board.addEventListener('click', (e) => {
-        if (dragState) return; // Игнорируем клик во время drag
+        if (dragState) return;
         const square = e.target.closest('.square');
         if (square) onSquareClick(square.dataset.square);
     });
     
-    // --- Mouse drag ---
+    // --- Mouse ---
     dom.board.addEventListener('mousedown', (e) => {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl) return;
         e.preventDefault();
-        pointerStart = { x: e.clientX, y: e.clientY, pieceEl };
+        
+        const squareEl = pieceEl.closest('.square');
+        const fromSquare = squareEl.dataset.square;
+        const piece = state.game.get(fromSquare);
+        
+        // СРАЗУ выбираем фигуру и показываем подсказки (как при клике)
+        if (piece && piece.color === state.playerColor && state.gameStarted && !state.gameOver && state.game.turn() === state.playerColor) {
+            const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
+            if (moves.length > 0) {
+                state.selectedSquare = fromSquare;
+                state.validMoves = moves;
+                renderBoard();
+            }
+        }
+        
+        pointerStart = { x: e.clientX, y: e.clientY, pieceEl, fromSquare };
     });
     
     document.addEventListener('mousemove', (e) => {
         if (!pointerStart) return;
+        
+        // Если drag ещё не начался — проверяем порог
         if (!dragState) {
             const dx = Math.abs(e.clientX - pointerStart.x);
             const dy = Math.abs(e.clientY - pointerStart.y);
             if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-            startDrag(pointerStart.pieceEl, pointerStart.x, pointerStart.y);
+            
+            // Порог пройден — начинаем drag с ТЕКУЩИМИ координатами
+            startDrag(pointerStart.pieceEl, e.clientX, e.clientY, pointerStart.fromSquare);
+            return;
         }
-        if (dragState) moveDrag(e.clientX, e.clientY);
+        
+        moveDrag(e.clientX, e.clientY);
     });
     
     document.addEventListener('mouseup', (e) => {
         if (pointerStart && !dragState) {
-            // Короткий клик по фигуре → старое поведение
+            // Короткий клик — обрабатываем как обычный клик по клетке
             const square = pointerStart.pieceEl.closest('.square');
             if (square) onSquareClick(square.dataset.square);
-            pointerStart = null;
-            return;
+        } else if (dragState) {
+            endDrag(e.clientX, e.clientY);
         }
-        if (dragState) endDrag(e.clientX, e.clientY);
         pointerStart = null;
     });
     
@@ -116,11 +138,24 @@ export function initBoardClickHandler(onSquareClick) {
     dom.board.addEventListener('touchstart', (e) => {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl || e.touches.length !== 1) return;
-        
-        // УБРАЛИ e.preventDefault() — он вызывает лаги
         const touch = e.touches[0];
-        pointerStart = { x: touch.clientX, y: touch.clientY, pieceEl };
-    }, { passive: true }); // <-- passive: true для производительности
+        
+        const squareEl = pieceEl.closest('.square');
+        const fromSquare = squareEl.dataset.square;
+        const piece = state.game.get(fromSquare);
+        
+        // СРАЗУ показываем подсказки
+        if (piece && piece.color === state.playerColor && state.gameStarted && !state.gameOver && state.game.turn() === state.playerColor) {
+            const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
+            if (moves.length > 0) {
+                state.selectedSquare = fromSquare;
+                state.validMoves = moves;
+                renderBoard();
+            }
+        }
+        
+        pointerStart = { x: touch.clientX, y: touch.clientY, pieceEl, fromSquare };
+    }, { passive: true });
     
     document.addEventListener('touchmove', (e) => {
         if (!pointerStart || e.touches.length !== 1) return;
@@ -130,23 +165,21 @@ export function initBoardClickHandler(onSquareClick) {
             const dx = Math.abs(touch.clientX - pointerStart.x);
             const dy = Math.abs(touch.clientY - pointerStart.y);
             if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-            startDrag(pointerStart.pieceEl, pointerStart.x, pointerStart.y);
+            
+            startDrag(pointerStart.pieceEl, touch.clientX, touch.clientY, pointerStart.fromSquare);
         }
         
         if (dragState) {
-            e.preventDefault(); 
+            e.preventDefault();
             moveDrag(touch.clientX, touch.clientY);
         }
     }, { passive: false });
-        
+    
     document.addEventListener('touchend', (e) => {
         if (pointerStart && !dragState) {
             const square = pointerStart.pieceEl.closest('.square');
             if (square) onSquareClick(square.dataset.square);
-            pointerStart = null;
-            return;
-        }
-        if (dragState) {
+        } else if (dragState) {
             const touch = e.changedTouches[0];
             endDrag(touch.clientX, touch.clientY);
         }
@@ -154,37 +187,13 @@ export function initBoardClickHandler(onSquareClick) {
     });
 }
 
-function canDragPiece(pieceEl) {
-    const { game, playerColor, gameStarted, gameOver } = state;
-    if (!gameStarted || gameOver) return false;
-    if (game.turn() !== playerColor) return false;
-    
-    const squareEl = pieceEl.closest('.square');
-    if (!squareEl) return false;
-    
-    const piece = game.get(squareEl.dataset.square);
-    return piece && piece.color === playerColor;
-}
-
-function startDrag(pieceEl, x, y) {
-    if (!canDragPiece(pieceEl)) {
-        pointerStart = null;
-        return;
-    }
-    
-    const squareEl = pieceEl.closest('.square');
-    const fromSquare = squareEl.dataset.square;
+// ========== Drag логика ==========
+function startDrag(pieceEl, x, y, fromSquare) {
     const piece = state.game.get(fromSquare);
-    const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
-    
-    if (moves.length === 0) {
+    if (!piece) {
         pointerStart = null;
         return;
     }
-    
-    state.selectedSquare = fromSquare;
-    state.validMoves = moves;
-    renderBoard();
     
     const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
     if (sourceEl) sourceEl.classList.add('drag-source');
@@ -222,22 +231,20 @@ function moveDrag(x, y) {
 
 function endDrag(x, y) {
     if (!dragState) return;
-    
-    // 1. Сохраняем данные ПЕРЕД обнулением
+
     const fromSquare = dragState.fromSquare;
     const pieceType = dragState.pieceType;
     const toSquare = getSquareAtPosition(x, y);
     
-    // 2. Очищаем визуал
+    // Очищаем визуал
     if (dragState.floatingEl) dragState.floatingEl.remove();
     dom.board.classList.remove('dragging');
     dom.board.querySelectorAll('.square.drag-over').forEach(el => el.classList.remove('drag-over'));
     if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-source');
-    
-    // 3. Обнуляем dragState
+
     dragState = null;
     
-    // 4. Если отпустили на валидной клетке — инициируем ход
+    // Если отпустили на валидной клетке — делаем ход
     if (toSquare && state.validMoves.includes(toSquare)) {
         const isPromotion = pieceType === 'p' && (toSquare[1] === '1' || toSquare[1] === '8');
         
@@ -252,7 +259,6 @@ function endDrag(x, y) {
         }
     }
     
-    // 5. Сбрасываем подсветку
     state.selectedSquare = null;
     state.validMoves = [];
     renderBoard();

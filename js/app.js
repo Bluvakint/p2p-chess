@@ -69,7 +69,7 @@ function initGlobalEventListeners() {
     });
     
     dom.showQrBtn.addEventListener('click', () => {
-        dom.qrcodeContainer.innerHTML = ''; // Очищаем старый QR
+        dom.qrcodeContainer.innerHTML = '';
         new QRCode(dom.qrcodeContainer, {
             text: window.location.href,
             width: 200,
@@ -128,7 +128,7 @@ export function handleIncomingData(data) {
             
             if (state.iAmReady) {
                 state.iAmReady = false;
-                updateReadyButton(state); // <--- ВОТ ЭТА СТРОКА ИСПРАВЛЯЕТ ВИЗУАЛЬНЫЙ БАГ!
+                updateReadyButton(state);
                 updateReadyBadges(state);
                 send({ type: 'unready' });
             }
@@ -218,7 +218,7 @@ export function handleIncomingData(data) {
 
 // ========== Старт игры ==========
 function onGameStart() {
-    resetGameState(); // <-- Единая точка сброса
+    resetGameState();
     
     state.gameStarted = true;
     state.gameOver = false;
@@ -317,7 +317,6 @@ function handleDrawOffer() {
 }
 
 function endGameByDraw(reason) {
-    // Сбрасываем состояние игры (включая кнопку ничьей, благодаря resetGameState)
     resetGameState();
     
     state.gameOver = true;

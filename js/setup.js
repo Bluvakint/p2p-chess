@@ -3,7 +3,7 @@ import { dom } from './dom.js';
 import { showToast, toggle, updateReadyBadges, updateReadyButton, applySettingsToUI, setSettingsEditable } from './ui.js';
 import { send } from './peer.js';
 
-// 1. Универсальная функция для группы опций (объявлена в самом верху для безопасности)
+// 1. Универсальная функция для группы опций
 function initOptionGroup(groupEl, onChange) {
     groupEl.addEventListener('click', (e) => {
         const btn = e.target.closest('.option-btn');
@@ -177,7 +177,7 @@ export function handleHostDisconnect() {
     state.peer = new Peer(newRoomId);
     window.history.replaceState({}, '', `?room=${newRoomId}`);
     
-    // ВАЖНО: Добавляем обработчик подключения к новому peer
+    // Добавляем обработчик подключения к новому peer
     state.peer.on('connection', (connection) => {
         state.conn = connection;
         
