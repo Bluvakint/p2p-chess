@@ -314,6 +314,7 @@ h1 {
     cursor: pointer;
     position: relative;
     transition: all 0.15s ease;
+    aspect-ratio: 1;
 }
 
 .square.light { background-color: var(--light-square); }
@@ -354,7 +355,20 @@ h1 {
     pointer-events: none;
 }
 
-.piece { line-height: 1; z-index: 1; user-select: none; }
+.piece {
+    line-height: 1;
+    z-index: 1;
+    user-select: none;
+    font-size: 120%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
 
 /* Drag & Drop стили */
 .square.drag-source {
