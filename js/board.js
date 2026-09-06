@@ -3,7 +3,6 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 
 let dragState = null;
-let pointerStart = null;
 let hasMoved = false;
 
 export function renderBoard() {
@@ -75,34 +74,99 @@ function findKingSquare(boardState, color) {
 
 export function initBoardClickHandler(onSquareClick) {
     
-    // --- КЛИК (fallback для пустых клеток) ---
+    // Клик для пустых клеток
     dom.board.addEventListener('click', (e) => {
         if (dragState) return;
         const square = e.target.closest('.square');
         if (square) onSquareClick(square.dataset.square);
     });
     
-    // --- Mouse ---
-    dom.board.addEventListener('mousedown', (e) => {
+    // POINTER DOWN — работает и на мыши, и на тачскрине
+    dom.board.addEventListener('pointerdown', (e) => {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl) return;
+        
         e.preventDefault();
-        startInteraction(pieceEl, e.clientX, e.clientY, 'mouse');
+        e.stopPropagation();
+        
+        const squareEl = pieceEl.closest('.square');
+        const fromSquare = squareEl.dataset.square;
+        const piece = state.game.get(fromSquare);
+        
+        if (!piece || piece.color !== state.playerColor) return;
+        if (!state.gameStarted || state.gameOver) return;
+        if (state.game.turn() !== state.playerColor) return;
+        
+        const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
+        if (moves.length === 0) return;
+        
+        // Захватываем pointer
+        pieceEl.setPointerCapture(e.pointerId);
+        
+        // Показываем подсказки
+        state.selectedSquare = fromSquare;
+        state.validMoves = moves;
+        renderBoard();
+        
+        // Получаем координаты центра фигуры
+        const pieceRect = pieceEl.getBoundingClientRect();
+        const centerX = pieceRect.left + pieceRect.width / 2;
+        const centerY = pieceRect.top + pieceRect.height / 2;
+        
+        // Создаём floating piece СРАЗУ
+        const floatingEl = document.createElement('span');
+        floatingEl.className = `floating-piece ${piece.color === 'w' ? 'white' : 'black'}`;
+        floatingEl.textContent = PIECES[piece.color][piece.type];
+        floatingEl.style.left = `${centerX}px`;
+        floatingEl.style.top = `${centerY}px`;
+        floatingEl.style.opacity = '0'; // Скрыт пока не начнём движение
+        document.body.appendChild(floatingEl);
+        
+        const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
+        if (sourceEl) sourceEl.classList.add('drag-source');
+        
+        dragState = {
+            fromSquare,
+            pieceType: piece.type,
+            pieceColor: piece.color,
+            floatingEl,
+            sourceEl,
+            pointerId: e.pointerId,
+            startX: centerX,
+            startY: centerY,
+            currentX: e.clientX,
+            currentY: e.clientY
+        };
+        
+        hasMoved = false;
     });
     
-    document.addEventListener('mousemove', (e) => {
-        if (!dragState) return;
-        if (!hasMoved) {
+    // POINTER MOVE
+    document.addEventListener('pointermove', (e) => {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        
+        const dx = Math.abs(e.clientX - dragState.startX);
+        const dy = Math.abs(e.clientY - dragState.startY);
+        
+        if (!hasMoved && (dx > 3 || dy > 3)) {
             hasMoved = true;
-            showFloatingPiece(e.clientX, e.clientY);
+            dragState.floatingEl.style.opacity = '1';
+            dom.board.classList.add('dragging');
         }
-        moveDrag(e.clientX, e.clientY);
+        
+        if (hasMoved) {
+            dragState.currentX = e.clientX;
+            dragState.currentY = e.clientY;
+            moveDrag(e.clientX, e.clientY);
+        }
     });
     
-    document.addEventListener('mouseup', (e) => {
-        if (!dragState) return;
+    // POINTER UP
+    document.addEventListener('pointerup', (e) => {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        
         if (!hasMoved) {
-            // Не было движения — это клик
+            // Клик
             const square = dragState.fromSquare;
             cleanupDrag();
             onSquareClick(square);
@@ -111,103 +175,11 @@ export function initBoardClickHandler(onSquareClick) {
         }
     });
     
-    // --- Touch (мобильные) ---
-    dom.board.addEventListener('touchstart', (e) => {
-        const pieceEl = e.target.closest('.piece');
-        if (!pieceEl || e.touches.length !== 1) return;
-        
-        const touch = e.touches[0];
-        e.preventDefault(); // БЛОКИРУЕМ СКРОЛЛ СРАЗУ
-        startInteraction(pieceEl, touch.clientX, touch.clientY, 'touch');
-    }, { passive: false });
-    
-    document.addEventListener('touchmove', (e) => {
-        if (!dragState || e.touches.length !== 1) return;
-        e.preventDefault();
-        
-        const touch = e.touches[0];
-        if (!hasMoved) {
-            hasMoved = true;
-            showFloatingPiece(touch.clientX, touch.clientY);
-        }
-        moveDrag(touch.clientX, touch.clientY);
-    }, { passive: false });
-    
-    document.addEventListener('touchend', (e) => {
-        if (!dragState) return;
-        
-        const touch = e.changedTouches[0];
-        if (!hasMoved) {
-            // Не было движения — это клик
-            const square = dragState.fromSquare;
-            cleanupDrag();
-            onSquareClick(square);
-        } else {
-            endDrag(touch.clientX, touch.clientY);
-        }
+    // POINTER CANCEL (если браузер отменил pointer)
+    document.addEventListener('pointercancel', (e) => {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        cleanupDrag();
     });
-}
-
-function startInteraction(pieceEl, x, y, type) {
-    const squareEl = pieceEl.closest('.square');
-    const fromSquare = squareEl.dataset.square;
-    const piece = state.game.get(fromSquare);
-    
-    if (!piece || piece.color !== state.playerColor) return;
-    if (!state.gameStarted || state.gameOver) return;
-    if (state.game.turn() !== state.playerColor) return;
-    
-    const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
-    if (moves.length === 0) return;
-    
-    // Показываем подсказки
-    state.selectedSquare = fromSquare;
-    state.validMoves = moves;
-    renderBoard();
-    
-    // ВАЖНО: берём координаты центра фигуры, а не точки касания
-    const pieceRect = pieceEl.getBoundingClientRect();
-    const pieceCenterX = pieceRect.left + pieceRect.width / 2;
-    const pieceCenterY = pieceRect.top + pieceRect.height / 2;
-    
-    // Запоминаем начальную позицию (для определения движения)
-    pointerStart = { x: pieceCenterX, y: pieceCenterY };
-    hasMoved = false;
-    
-    // Подсвечиваем исходную клетку
-    const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
-    if (sourceEl) sourceEl.classList.add('drag-source');
-    
-    // Создаём dragState
-    dragState = {
-        fromSquare,
-        pieceType: piece.type,
-        pieceColor: piece.color,
-        sourceEl,
-        floatingEl: null,
-        // Сохраняем реальные координаты фигуры для первого отображения
-        pieceCenterX,
-        pieceCenterY
-    };
-}
-
-function showFloatingPiece(x, y) {
-    if (!dragState) return;
-    
-    const floatingEl = document.createElement('span');
-    floatingEl.className = `floating-piece ${dragState.pieceColor === 'w' ? 'white' : 'black'}`;
-    floatingEl.textContent = PIECES[dragState.pieceColor][dragState.pieceType];
-    
-    // Используем сохранённые координаты центра фигуры для первого отображения
-    const startX = dragState.pieceCenterX;
-    const startY = dragState.pieceCenterY;
-    
-    floatingEl.style.left = `${startX}px`;
-    floatingEl.style.top = `${startY}px`;
-    document.body.appendChild(floatingEl);
-    
-    dragState.floatingEl = floatingEl;
-    dom.board.classList.add('dragging');
 }
 
 function moveDrag(x, y) {
@@ -260,7 +232,6 @@ function cleanupDrag() {
         if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-source');
     }
     dragState = null;
-    pointerStart = null;
     hasMoved = false;
 }
 
