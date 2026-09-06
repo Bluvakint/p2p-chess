@@ -4,7 +4,7 @@ import { dom } from './dom.js';
 
 let dragState = null;
 let pointerStart = null;
-const DRAG_THRESHOLD = 5; // увеличим для мобильных
+let hasMoved = false;
 
 export function renderBoard() {
     const { game, playerColor, selectedSquare, validMoves } = state;
@@ -75,7 +75,7 @@ function findKingSquare(boardState, color) {
 
 export function initBoardClickHandler(onSquareClick) {
     
-    // --- КЛИК (универсальный fallback) ---
+    // --- КЛИК (fallback для пустых клеток) ---
     dom.board.addEventListener('click', (e) => {
         if (dragState) return;
         const square = e.target.closest('.square');
@@ -87,71 +87,28 @@ export function initBoardClickHandler(onSquareClick) {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl) return;
         e.preventDefault();
-        
-        const squareEl = pieceEl.closest('.square');
-        const fromSquare = squareEl.dataset.square;
-        const piece = state.game.get(fromSquare);
-        
-        if (piece && piece.color === state.playerColor && state.gameStarted && !state.gameOver && state.game.turn() === state.playerColor) {
-            const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
-            if (moves.length > 0) {
-                state.selectedSquare = fromSquare;
-                state.validMoves = moves;
-                renderBoard();
-                
-                // СРАЗУ создаём floating piece для мыши
-                const floatingEl = document.createElement('span');
-                floatingEl.className = `floating-piece ${piece.color === 'w' ? 'white' : 'black'}`;
-                floatingEl.textContent = PIECES[piece.color][piece.type];
-                floatingEl.style.left = `${e.clientX}px`;
-                floatingEl.style.top = `${e.clientY}px`;
-                floatingEl.style.display = 'none'; // скрыт пока не начнём drag
-                document.body.appendChild(floatingEl);
-                
-                const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
-                if (sourceEl) sourceEl.classList.add('drag-source');
-                
-                dragState = {
-                    fromSquare,
-                    pieceType: piece.type,
-                    floatingEl,
-                    sourceEl,
-                    isDragging: false
-                };
-            }
-        }
-        
-        pointerStart = { x: e.clientX, y: e.clientY, pieceEl, fromSquare };
+        startInteraction(pieceEl, e.clientX, e.clientY, 'mouse');
     });
     
     document.addEventListener('mousemove', (e) => {
-        if (!pointerStart || !dragState) return;
-        
-        const dx = Math.abs(e.clientX - pointerStart.x);
-        const dy = Math.abs(e.clientY - pointerStart.y);
-        
-        if (!dragState.isDragging && (dx >= DRAG_THRESHOLD || dy >= DRAG_THRESHOLD)) {
-            // Начинаем drag
-            dragState.isDragging = true;
-            dragState.floatingEl.style.display = '';
-            dom.board.classList.add('dragging');
+        if (!dragState) return;
+        if (!hasMoved) {
+            hasMoved = true;
+            showFloatingPiece(e.clientX, e.clientY);
         }
-        
-        if (dragState.isDragging) {
-            moveDrag(e.clientX, e.clientY);
-        }
+        moveDrag(e.clientX, e.clientY);
     });
     
     document.addEventListener('mouseup', (e) => {
-        if (pointerStart && dragState && !dragState.isDragging) {
-            // Короткий клик
-            const square = pointerStart.pieceEl.closest('.square');
-            if (square) onSquareClick(square.dataset.square);
+        if (!dragState) return;
+        if (!hasMoved) {
+            // Не было движения — это клик
+            const square = dragState.fromSquare;
             cleanupDrag();
-        } else if (dragState && dragState.isDragging) {
+            onSquareClick(square);
+        } else {
             endDrag(e.clientX, e.clientY);
         }
-        pointerStart = null;
     });
     
     // --- Touch (мобильные) ---
@@ -160,78 +117,88 @@ export function initBoardClickHandler(onSquareClick) {
         if (!pieceEl || e.touches.length !== 1) return;
         
         const touch = e.touches[0];
-        const squareEl = pieceEl.closest('.square');
-        const fromSquare = squareEl.dataset.square;
-        const piece = state.game.get(fromSquare);
-        
-        if (piece && piece.color === state.playerColor && state.gameStarted && !state.gameOver && state.game.turn() === state.playerColor) {
-            const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
-            if (moves.length > 0) {
-                state.selectedSquare = fromSquare;
-                state.validMoves = moves;
-                renderBoard();
-                
-                // СРАЗУ создаём floating piece для touch
-                const floatingEl = document.createElement('span');
-                floatingEl.className = `floating-piece ${piece.color === 'w' ? 'white' : 'black'}`;
-                floatingEl.textContent = PIECES[piece.color][piece.type];
-                floatingEl.style.left = `${touch.clientX}px`;
-                floatingEl.style.top = `${touch.clientY}px`;
-                floatingEl.style.display = 'none';
-                document.body.appendChild(floatingEl);
-                
-                const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
-                if (sourceEl) sourceEl.classList.add('drag-source');
-                
-                dragState = {
-                    fromSquare,
-                    pieceType: piece.type,
-                    floatingEl,
-                    sourceEl,
-                    isDragging: false
-                };
-                
-                e.preventDefault(); // блокируем скролл сразу
-            }
-        }
-        
-        pointerStart = { x: touch.clientX, y: touch.clientY, pieceEl, fromSquare };
+        e.preventDefault(); // БЛОКИРУЕМ СКРОЛЛ СРАЗУ
+        startInteraction(pieceEl, touch.clientX, touch.clientY, 'touch');
     }, { passive: false });
     
     document.addEventListener('touchmove', (e) => {
-        if (!pointerStart || !dragState || e.touches.length !== 1) return;
+        if (!dragState || e.touches.length !== 1) return;
+        e.preventDefault();
+        
         const touch = e.touches[0];
-        
-        const dx = Math.abs(touch.clientX - pointerStart.x);
-        const dy = Math.abs(touch.clientY - pointerStart.y);
-        
-        if (!dragState.isDragging && (dx >= DRAG_THRESHOLD || dy >= DRAG_THRESHOLD)) {
-            dragState.isDragging = true;
-            dragState.floatingEl.style.display = '';
-            dom.board.classList.add('dragging');
+        if (!hasMoved) {
+            hasMoved = true;
+            showFloatingPiece(touch.clientX, touch.clientY);
         }
-        
-        if (dragState.isDragging) {
-            e.preventDefault();
-            moveDrag(touch.clientX, touch.clientY);
-        }
+        moveDrag(touch.clientX, touch.clientY);
     }, { passive: false });
     
     document.addEventListener('touchend', (e) => {
-        if (pointerStart && dragState && !dragState.isDragging) {
-            const square = pointerStart.pieceEl.closest('.square');
-            if (square) onSquareClick(square.dataset.square);
+        if (!dragState) return;
+        
+        const touch = e.changedTouches[0];
+        if (!hasMoved) {
+            // Не было движения — это клик
+            const square = dragState.fromSquare;
             cleanupDrag();
-        } else if (dragState && dragState.isDragging) {
-            const touch = e.changedTouches[0];
+            onSquareClick(square);
+        } else {
             endDrag(touch.clientX, touch.clientY);
         }
-        pointerStart = null;
     });
 }
 
+function startInteraction(pieceEl, x, y, type) {
+    const squareEl = pieceEl.closest('.square');
+    const fromSquare = squareEl.dataset.square;
+    const piece = state.game.get(fromSquare);
+    
+    if (!piece || piece.color !== state.playerColor) return;
+    if (!state.gameStarted || state.gameOver) return;
+    if (state.game.turn() !== state.playerColor) return;
+    
+    const moves = state.game.moves({ square: fromSquare, verbose: true }).map(m => m.to);
+    if (moves.length === 0) return;
+    
+    // Показываем подсказки
+    state.selectedSquare = fromSquare;
+    state.validMoves = moves;
+    renderBoard();
+    
+    // Запоминаем начальную позицию
+    pointerStart = { x, y };
+    hasMoved = false;
+    
+    // Подсвечиваем исходную клетку
+    const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
+    if (sourceEl) sourceEl.classList.add('drag-source');
+    
+    // Создаём dragState (floating piece пока скрыт)
+    dragState = {
+        fromSquare,
+        pieceType: piece.type,
+        pieceColor: piece.color,
+        sourceEl,
+        floatingEl: null
+    };
+}
+
+function showFloatingPiece(x, y) {
+    if (!dragState) return;
+    
+    const floatingEl = document.createElement('span');
+    floatingEl.className = `floating-piece ${dragState.pieceColor === 'w' ? 'white' : 'black'}`;
+    floatingEl.textContent = PIECES[dragState.pieceColor][dragState.pieceType];
+    floatingEl.style.left = `${x}px`;
+    floatingEl.style.top = `${y}px`;
+    document.body.appendChild(floatingEl);
+    
+    dragState.floatingEl = floatingEl;
+    dom.board.classList.add('dragging');
+}
+
 function moveDrag(x, y) {
-    if (!dragState || !dragState.isDragging) return;
+    if (!dragState || !dragState.floatingEl) return;
     
     dragState.floatingEl.style.left = `${x}px`;
     dragState.floatingEl.style.top = `${y}px`;
@@ -245,18 +212,13 @@ function moveDrag(x, y) {
 }
 
 function endDrag(x, y) {
-    if (!dragState || !dragState.isDragging) return;
+    if (!dragState) return;
     
     const fromSquare = dragState.fromSquare;
     const pieceType = dragState.pieceType;
     const toSquare = getSquareAtPosition(x, y);
     
-    if (dragState.floatingEl) dragState.floatingEl.remove();
-    dom.board.classList.remove('dragging');
-    dom.board.querySelectorAll('.square.drag-over').forEach(el => el.classList.remove('drag-over'));
-    if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-source');
-    
-    dragState = null;
+    cleanupDrag();
     
     if (toSquare && state.validMoves.includes(toSquare)) {
         const isPromotion = pieceType === 'p' && (toSquare[1] === '1' || toSquare[1] === '8');
@@ -280,9 +242,13 @@ function endDrag(x, y) {
 function cleanupDrag() {
     if (dragState) {
         if (dragState.floatingEl) dragState.floatingEl.remove();
+        dom.board.classList.remove('dragging');
+        dom.board.querySelectorAll('.square.drag-over').forEach(el => el.classList.remove('drag-over'));
         if (dragState.sourceEl) dragState.sourceEl.classList.remove('drag-source');
-        dragState = null;
     }
+    dragState = null;
+    pointerStart = null;
+    hasMoved = false;
 }
 
 function getSquareAtPosition(x, y) {
@@ -293,7 +259,7 @@ function getSquareAtPosition(x, y) {
     const el = document.elementFromPoint(x, y);
     
     if (dragState && dragState.floatingEl) {
-        dragState.floatingEl.style.display = dragState.isDragging ? '' : 'none';
+        dragState.floatingEl.style.display = '';
     }
     
     if (!el) return null;
