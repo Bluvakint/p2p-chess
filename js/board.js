@@ -108,18 +108,15 @@ export function initBoardClickHandler(onSquareClick) {
         state.validMoves = moves;
         renderBoard();
         
-        // Получаем координаты центра фигуры
         const pieceRect = pieceEl.getBoundingClientRect();
-        const centerX = pieceRect.left + pieceRect.width / 2;
-        const centerY = pieceRect.top + pieceRect.height / 2;
-        
-        // Создаём floating piece СРАЗУ
         const floatingEl = document.createElement('span');
         floatingEl.className = `floating-piece ${piece.color === 'w' ? 'white' : 'black'}`;
         floatingEl.textContent = PIECES[piece.color][piece.type];
-        floatingEl.style.left = `${centerX}px`;
-        floatingEl.style.top = `${centerY}px`;
-        floatingEl.style.opacity = '0'; // Скрыт пока не начнём движение
+        floatingEl.style.left = `${pieceRect.left}px`;
+        floatingEl.style.top = `${pieceRect.top}px`;
+        floatingEl.style.width = `${pieceRect.width}px`;
+        floatingEl.style.height = `${pieceRect.height}px`;
+        floatingEl.style.opacity = '0';
         document.body.appendChild(floatingEl);
         
         const sourceEl = dom.board.querySelector(`[data-square="${fromSquare}"]`);
@@ -132,8 +129,10 @@ export function initBoardClickHandler(onSquareClick) {
             floatingEl,
             sourceEl,
             pointerId: e.pointerId,
-            startX: centerX,
-            startY: centerY,
+            startX: pieceRect.left + pieceRect.width / 2,
+            startY: pieceRect.top + pieceRect.height / 2,
+            pieceWidth: pieceRect.width,
+            pieceHeight: pieceRect.height,
             currentX: e.clientX,
             currentY: e.clientY
         };
@@ -185,8 +184,12 @@ export function initBoardClickHandler(onSquareClick) {
 function moveDrag(x, y) {
     if (!dragState || !dragState.floatingEl) return;
     
-    dragState.floatingEl.style.left = `${x}px`;
-    dragState.floatingEl.style.top = `${y}px`;
+    // Центрируем фигуру относительно курсора
+    const left = x - dragState.pieceWidth / 2;
+    const top = y - dragState.pieceHeight / 2;
+    
+    dragState.floatingEl.style.left = `${left}px`;
+    dragState.floatingEl.style.top = `${top}px`;
     
     const squareUnder = getSquareAtPosition(x, y);
     dom.board.querySelectorAll('.square.drag-over').forEach(el => el.classList.remove('drag-over'));

@@ -370,8 +370,7 @@ h1 {
     pointer-events: none;
     z-index: 9999;
     font-size: clamp(2.5rem, 7vw, 4rem);
-    transform: translate(-50%, -50%);
-    transition: none;
+    will-change: left, top;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
 
