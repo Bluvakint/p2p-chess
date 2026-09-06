@@ -5,8 +5,8 @@ import { dom } from './dom.js';
 let activePiece = null;
 let startSquare = null;
 let pointerId = null;
-let startX = 0;
-let startY = 0;
+let grabOffsetX = 0;
+let grabOffsetY = 0;
 let hasMoved = false;
 let ignoreNextClick = false;
 
@@ -98,16 +98,18 @@ export function initBoardClickHandler(onSquareClick) {
         e.preventDefault();
         pieceEl.setPointerCapture(e.pointerId);
         
-        // 1. Запоминаем данные ДО любых изменений DOM
         startSquare = fromSquare;
         pointerId = e.pointerId;
         hasMoved = false;
         
+        // 1. Получаем точные координаты и размер фигуры
         const rect = pieceEl.getBoundingClientRect();
-        startX = rect.left;
-        startY = rect.top;
         
-        // 2. Показываем подсказки ТОЧЕЧНО, не перерисовывая всю доску (чтобы не уничтожить pieceEl)
+        // 2. Вычисляем смещение точки касания относительно левого верхнего угла фигуры
+        grabOffsetX = e.clientX - rect.left;
+        grabOffsetY = e.clientY - rect.top;
+        
+        // 3. Показываем подсказки точечно, не перерисовывая всю доску
         state.selectedSquare = fromSquare;
         state.validMoves = moves;
         
@@ -122,14 +124,15 @@ export function initBoardClickHandler(onSquareClick) {
             }
         });
         
-        // 3. Превращаем САМУ фигуру в "плавающую"
+        // 4. Превращаем САМУ фигуру в "плавающую", сохраняя её начальную позицию
         activePiece = pieceEl;
         activePiece.style.position = 'fixed';
-        activePiece.style.left = `${startX}px`;
-        activePiece.style.top = `${startY}px`;
+        activePiece.style.left = `${rect.left}px`;
+        activePiece.style.top = `${rect.top}px`;
         activePiece.style.zIndex = '9999';
         activePiece.style.pointerEvents = 'none'; // Чтобы elementFromPoint работал сквозь неё
         activePiece.style.transition = 'none';
+        activePiece.style.willChange = 'left, top';
         
         squareEl.classList.add('drag-source');
     });
@@ -138,8 +141,8 @@ export function initBoardClickHandler(onSquareClick) {
     document.addEventListener('pointermove', (e) => {
         if (!activePiece || e.pointerId !== pointerId) return;
         
-        const dx = Math.abs(e.clientX - startX);
-        const dy = Math.abs(e.clientY - startY);
+        const dx = Math.abs(e.clientX - (parseFloat(activePiece.style.left) + grabOffsetX));
+        const dy = Math.abs(e.clientY - (parseFloat(activePiece.style.top) + grabOffsetY));
         
         if (!hasMoved && (dx > 5 || dy > 5)) {
             hasMoved = true;
@@ -147,11 +150,9 @@ export function initBoardClickHandler(onSquareClick) {
         }
         
         if (hasMoved) {
-            // Двигаем саму фигуру, центрируя по пальцу/курсору
-            const w = activePiece.offsetWidth || 50;
-            const h = activePiece.offsetHeight || 50;
-            activePiece.style.left = `${e.clientX - w / 2}px`;
-            activePiece.style.top = `${e.clientY - h / 2}px`;
+            // Двигаем фигуру, сохраняя исходное смещение хвата
+            activePiece.style.left = `${e.clientX - grabOffsetX}px`;
+            activePiece.style.top = `${e.clientY - grabOffsetY}px`;
             
             highlightSquareUnder(e.clientX, e.clientY);
         }
@@ -179,7 +180,7 @@ export function initBoardClickHandler(onSquareClick) {
                     window.dispatchEvent(new CustomEvent('board:move', { detail: { from: startSquare, to: toSquare } }));
                 }
             } else {
-                // Возврат на место, если отпустили вне доски
+                // Возврат на место, если отпустили вне доски или на недопустимой клетке
                 state.selectedSquare = null;
                 state.validMoves = [];
                 renderBoard();
@@ -232,6 +233,7 @@ export function initBoardClickHandler(onSquareClick) {
             activePiece.style.zIndex = '';
             activePiece.style.pointerEvents = '';
             activePiece.style.transition = '';
+            activePiece.style.willChange = '';
         }
         dom.board.classList.remove('dragging');
         dom.board.querySelectorAll('.square.drag-over, .drag-source').forEach(el => {
