@@ -2,11 +2,9 @@ import { PIECES } from './constants.js';
 import { state } from './state.js';
 import { dom } from './dom.js';
 
-let activePiece = null;
+let dragClone = null;
 let startSquare = null;
 let pointerId = null;
-let grabOffsetX = 0;
-let grabOffsetY = 0;
 let hasMoved = false;
 let ignoreNextClick = false;
 
@@ -79,7 +77,6 @@ function findKingSquare(boardState, color) {
 
 export function initBoardClickHandler(onSquareClick) {
     
-    // POINTER DOWN
     dom.board.addEventListener('pointerdown', (e) => {
         const pieceEl = e.target.closest('.piece');
         if (!pieceEl) return;
@@ -102,17 +99,9 @@ export function initBoardClickHandler(onSquareClick) {
         pointerId = e.pointerId;
         hasMoved = false;
         
-        // 1. Получаем точные координаты и размер фигуры
-        const rect = pieceEl.getBoundingClientRect();
-        
-        // 2. Вычисляем смещение точки касания относительно левого верхнего угла фигуры
-        grabOffsetX = e.clientX - rect.left;
-        grabOffsetY = e.clientY - rect.top;
-        
-        // 3. Показываем подсказки точечно, не перерисовывая всю доску
+        // Показываем подсказки
         state.selectedSquare = fromSquare;
         state.validMoves = moves;
-        
         document.querySelectorAll('.square').forEach(sq => {
             sq.classList.remove('selected', 'valid-move', 'valid-capture');
         });
@@ -124,25 +113,37 @@ export function initBoardClickHandler(onSquareClick) {
             }
         });
         
-        // 4. Превращаем САМУ фигуру в "плавающую", сохраняя её начальную позицию
-        activePiece = pieceEl;
-        activePiece.style.position = 'fixed';
-        activePiece.style.left = `${rect.left}px`;
-        activePiece.style.top = `${rect.top}px`;
-        activePiece.style.zIndex = '9999';
-        activePiece.style.pointerEvents = 'none'; // Чтобы elementFromPoint работал сквозь неё
-        activePiece.style.transition = 'none';
-        activePiece.style.willChange = 'left, top';
+        // Создаем КЛОН фигуры для перетаскивания
+        const rect = pieceEl.getBoundingClientRect();
+        dragClone = document.createElement('div');
+        dragClone.className = `piece ${piece.color === 'w' ? 'white' : 'black'}`;
+        dragClone.textContent = PIECES[piece.color][piece.type];
+        dragClone.style.position = 'fixed';
+        dragClone.style.left = `${rect.left}px`;
+        dragClone.style.top = `${rect.top}px`;
+        dragClone.style.width = `${rect.width}px`;
+        dragClone.style.height = `${rect.height}px`;
+        dragClone.style.zIndex = '9999';
+        dragClone.style.pointerEvents = 'none';
+        dragClone.style.opacity = '0.8';
+        dragClone.style.transition = 'none';
+        dragClone.style.display = 'flex';
+        dragClone.style.alignItems = 'center';
+        dragClone.style.justifyContent = 'center';
+        dragClone.style.fontSize = window.getComputedStyle(pieceEl).fontSize;
+        document.body.appendChild(dragClone);
         
+        // Скрываем оригинал на время drag
+        pieceEl.style.opacity = '0.3';
         squareEl.classList.add('drag-source');
     });
 
-    // POINTER MOVE
     document.addEventListener('pointermove', (e) => {
-        if (!activePiece || e.pointerId !== pointerId) return;
+        if (!dragClone || e.pointerId !== pointerId) return;
         
-        const dx = Math.abs(e.clientX - (parseFloat(activePiece.style.left) + grabOffsetX));
-        const dy = Math.abs(e.clientY - (parseFloat(activePiece.style.top) + grabOffsetY));
+        const rect = dragClone.getBoundingClientRect();
+        const dx = Math.abs(e.clientX - (rect.left + rect.width / 2));
+        const dy = Math.abs(e.clientY - (rect.top + rect.height / 2));
         
         if (!hasMoved && (dx > 5 || dy > 5)) {
             hasMoved = true;
@@ -150,25 +151,22 @@ export function initBoardClickHandler(onSquareClick) {
         }
         
         if (hasMoved) {
-            // Двигаем фигуру, сохраняя исходное смещение хвата
-            activePiece.style.left = `${e.clientX - grabOffsetX}px`;
-            activePiece.style.top = `${e.clientY - grabOffsetY}px`;
+            // Фигура выше курсора, курсор снизу
+            dragClone.style.left = `${e.clientX - rect.width / 2}px`;
+            dragClone.style.top = `${e.clientY - rect.height - 10}px`;
             
             highlightSquareUnder(e.clientX, e.clientY);
         }
     });
 
-    // POINTER UP
     document.addEventListener('pointerup', (e) => {
-        if (!activePiece || e.pointerId !== pointerId) return;
+        if (!dragClone || e.pointerId !== pointerId) return;
         
         if (!hasMoved) {
-            // Это был просто клик
             cleanupDrag();
             onSquareClick(startSquare);
         } else {
-            // Это был драг
-            ignoreNextClick = true; // Блокируем срабатывание click события после drag
+            ignoreNextClick = true;
             const toSquare = getSquareAtPosition(e.clientX, e.clientY);
             cleanupDrag();
             
@@ -180,7 +178,6 @@ export function initBoardClickHandler(onSquareClick) {
                     window.dispatchEvent(new CustomEvent('board:move', { detail: { from: startSquare, to: toSquare } }));
                 }
             } else {
-                // Возврат на место, если отпустили вне доски или на недопустимой клетке
                 state.selectedSquare = null;
                 state.validMoves = [];
                 renderBoard();
@@ -188,16 +185,14 @@ export function initBoardClickHandler(onSquareClick) {
         }
     });
 
-    // POINTER CANCEL
     document.addEventListener('pointercancel', (e) => {
-        if (!activePiece || e.pointerId !== pointerId) return;
+        if (!dragClone || e.pointerId !== pointerId) return;
         cleanupDrag();
         state.selectedSquare = null;
         state.validMoves = [];
         renderBoard();
     });
     
-    // Клик для пустых клеток (если не был драг)
     dom.board.addEventListener('click', (e) => {
         if (ignoreNextClick) {
             ignoreNextClick = false;
@@ -217,7 +212,6 @@ export function initBoardClickHandler(onSquareClick) {
     }
 
     function getSquareAtPosition(x, y) {
-        // activePiece имеет pointer-events: none, так что elementFromPoint сработает корректно
         const el = document.elementFromPoint(x, y);
         if (!el) return null;
         const square = el.closest('.square');
@@ -225,21 +219,16 @@ export function initBoardClickHandler(onSquareClick) {
     }
 
     function cleanupDrag() {
-        if (activePiece) {
-            // Возвращаем стили к исходным, чтобы renderBoard мог нормально её отрисовать
-            activePiece.style.position = '';
-            activePiece.style.left = '';
-            activePiece.style.top = '';
-            activePiece.style.zIndex = '';
-            activePiece.style.pointerEvents = '';
-            activePiece.style.transition = '';
-            activePiece.style.willChange = '';
+        if (dragClone) {
+            dragClone.remove();
+            dragClone = null;
         }
         dom.board.classList.remove('dragging');
         dom.board.querySelectorAll('.square.drag-over, .drag-source').forEach(el => {
             el.classList.remove('drag-over', 'drag-source');
         });
-        activePiece = null;
+        // Возвращаем прозрачность оригинальной фигуре
+        document.querySelectorAll('.piece').forEach(p => p.style.opacity = '');
         pointerId = null;
         hasMoved = false;
     }
