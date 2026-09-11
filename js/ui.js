@@ -68,13 +68,11 @@ export function applySettingsToUI(settings) {
  * @param {HTMLElement} groupEl - Контейнер группы
  * @param {string} value - Значение для выбора
  */
-function updateOptionGroup(groupEl, value) {
+export function updateOptionGroup(groupEl, value) {
     groupEl.querySelectorAll('.option-btn').forEach(b => {
         b.classList.toggle('selected', b.dataset.value === value);
     });
 }
-
-export { updateOptionGroup };
 
 export function setSettingsEditable(editable) {
     dom.colorOptions.querySelectorAll('.option-btn').forEach(b => b.disabled = !editable);
