@@ -6,6 +6,33 @@ import { sendMove } from './peer.js';
 import { playMove, playCapture, playCheck } from './sounds.js';
 import { showPromotionModal } from './ui.js';
 
+/**
+ * Выполняет ход на доске и отправляет сопернику
+ * @param {string} from - Начальная клетка (например, 'e2')
+ * @param {string} to - Конечная клетка (например, 'e4')
+ * @param {string} [promotion] - Фигура для превращения (опционально)
+ */
+export function executeMove(from, to, promotion = 'q') {
+    const move = state.game.move({ from, to, promotion });
+    if (!move) return false;
+    
+    playSoundForMove(move);
+    
+    const data = { type: 'move', move };
+    if (state.settings.timeControl > 0) {
+        data.whiteTime = state.whiteTime;
+        data.blackTime = state.blackTime;
+    }
+    sendMove(data);
+    
+    renderBoard();
+    updateNotation();
+    updateActivePlayer();
+    window.dispatchEvent(new CustomEvent('game:check-over'));
+    
+    return true;
+}
+
 export function handleSquareClick(square) {
     const { game, playerColor, gameStarted, gameOver, selectedSquare, validMoves } = state;
     
@@ -14,18 +41,19 @@ export function handleSquareClick(square) {
     
     const piece = game.get(square);
     
+    // Если выбрана клетка и кликнули на допустимый ход
     if (selectedSquare && validMoves.includes(square)) {
-        // ПРОВЕРКА НА ПРЕВРАЩЕНИЕ
         const movingPiece = game.get(selectedSquare);
         const isPromotion = movingPiece.type === 'p' && (square[1] === '1' || square[1] === '8');
         
         if (isPromotion) {
             state.pendingPromotion = { from: selectedSquare, to: square };
             showPromotionModal(playerColor, (chosenPiece) => {
-                makeMoveWithPromotion(state.pendingPromotion.from, state.pendingPromotion.to, chosenPiece);
+                executeMove(state.pendingPromotion.from, state.pendingPromotion.to, chosenPiece);
+                state.pendingPromotion = null;
             });
         } else {
-            makeMove(selectedSquare, square);
+            executeMove(selectedSquare, square);
         }
         
         state.selectedSquare = null;
@@ -34,53 +62,17 @@ export function handleSquareClick(square) {
         return;
     }
     
+    // Выбор своей фигуры
     if (piece && piece.color === playerColor) {
         state.selectedSquare = square;
         state.validMoves = game.moves({ square, verbose: true }).map(m => m.to);
         renderBoard();
     } else {
+        // Сброс выделения
         state.selectedSquare = null;
         state.validMoves = [];
         renderBoard();
     }
-}
-
-export function makeMoveWithPromotion(from, to, promotion) {
-    const move = state.game.move({ from, to, promotion });
-    if (!move) return;
-    
-    playSoundForMove(move);
-    
-    const data = { type: 'move', move };
-    if (state.settings.timeControl > 0) {
-        data.whiteTime = state.whiteTime;
-        data.blackTime = state.blackTime;
-    }
-    sendMove(data);
-    
-    renderBoard();
-    updateNotation();
-    updateActivePlayer();
-    window.dispatchEvent(new CustomEvent('game:check-over'));
-}
-
-export function makeMove(from, to) {
-    const move = state.game.move({ from, to, promotion: 'q' }); // По умолчанию ферзь, если вдруг вызовут напрямую
-    if (!move) return;
-    
-    playSoundForMove(move);
-    
-    const data = { type: 'move', move };
-    if (state.settings.timeControl > 0) {
-        data.whiteTime = state.whiteTime;
-        data.blackTime = state.blackTime;
-    }
-    sendMove(data);
-    
-    renderBoard();
-    updateNotation();
-    updateActivePlayer();
-    window.dispatchEvent(new CustomEvent('game:check-over'));
 }
 
 function playSoundForMove(move) {
