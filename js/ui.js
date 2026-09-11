@@ -1,5 +1,5 @@
 import { dom } from './dom.js';
-import { PIECES } from './constants.js'; // Добавь этот импорт в начало файла
+import { PIECES } from './constants.js';
 
 export function showToast(msg) {
     dom.toast.textContent = msg;
@@ -63,11 +63,18 @@ export function applySettingsToUI(settings) {
     }
 }
 
+/**
+ * Обновляет визуальное состояние группы опций
+ * @param {HTMLElement} groupEl - Контейнер группы
+ * @param {string} value - Значение для выбора
+ */
 function updateOptionGroup(groupEl, value) {
     groupEl.querySelectorAll('.option-btn').forEach(b => {
         b.classList.toggle('selected', b.dataset.value === value);
     });
 }
+
+export { updateOptionGroup };
 
 export function setSettingsEditable(editable) {
     dom.colorOptions.querySelectorAll('.option-btn').forEach(b => b.disabled = !editable);
@@ -103,7 +110,6 @@ export function showPromotionModal(color, onSelect) {
         btn.addEventListener('click', () => {
             dom.promotionModal.classList.remove('active');
             dom.promotionModal.classList.add('hidden');
-            // Вызываем коллбек, передавая выбранную фигуру
             onSelect(type);
         });
         dom.promotionOptions.appendChild(btn);

@@ -3,7 +3,7 @@ import { dom, initDom } from './dom.js';
 import { showToast, toggle, applySettingsToUI, showGameOverModal, updateReadyBadges } from './ui.js';
 import { initPeer, send, closeConnection } from './peer.js';
 import { renderBoard, initBoardClickHandler } from './board.js';
-import { handleSquareClick } from './game.js';
+import { handleSquareClick, executeMove } from './game.js';
 import { updateNotation, copyNotation } from './notation.js';
 import { startTimer, updateClocks, updateActivePlayer, showClocks } from './clock.js';
 import { playGameOver, playCheck, playCapture, playMove, playClick } from './sounds.js';
@@ -56,7 +56,7 @@ function initGlobalEventListeners() {
     // Drag & Drop события от board.js
     window.addEventListener('board:move', (e) => {
         const { from, to } = e.detail;
-        import('./game.js').then(g => g.makeMove(from, to));
+        executeMove(from, to);
     });
     
     window.addEventListener('board:promotion', (e) => {
@@ -64,7 +64,8 @@ function initGlobalEventListeners() {
         import('./ui.js').then(ui => {
             state.pendingPromotion = { from, to };
             ui.showPromotionModal(state.playerColor, (chosenPiece) => {
-                import('./game.js').then(g => g.makeMoveWithPromotion(from, to, chosenPiece));
+                executeMove(from, to, chosenPiece);
+                state.pendingPromotion = null;
             });
         });
     });
