@@ -11,7 +11,7 @@ export const state = {
     conn: null,
     
     // Игра
-    game: null, // инициализируется в app.js
+    game: null,
     gameStarted: false,
     gameOver: false,
     selectedSquare: null,
@@ -30,8 +30,10 @@ export const state = {
     iAmReady: false,
     opponentReady: false,
 
+    // Ничья
     drawOffered: false,
     drawReceived: false,
-    pendingPromotion: null,
+    
+    // История
     lastGameNotation: null
 };

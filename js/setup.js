@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { showToast, toggle, updateReadyBadges, updateReadyButton, applySettingsToUI, setSettingsEditable } from './ui.js';
+import { showToast, toggle, updateOptionGroup, updateReadyBadges, updateReadyButton, applySettingsToUI, setSettingsEditable } from './ui.js';
 import { send } from './peer.js';
 
 // 1. Универсальная функция для группы опций

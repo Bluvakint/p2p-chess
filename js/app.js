@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { dom } from './dom.js';
+import { dom, initDom } from './dom.js';
 import { showToast, toggle, applySettingsToUI, showGameOverModal, updateReadyBadges } from './ui.js';
 import { initPeer, send, closeConnection } from './peer.js';
 import { renderBoard, initBoardClickHandler } from './board.js';
@@ -11,6 +11,7 @@ import { initSetup, showReadyUI, returnToWaiting, returnToSetup, checkBothReady,
 
 // ========== Инициализация ==========
 function init() {
+    initDom();
     state.game = new Chess();
     
     const isHost = initPeer();
@@ -52,7 +53,7 @@ function initGlobalEventListeners() {
         }
     });
     
-     // === Drag & Drop события от board.js ===
+    // Drag & Drop события от board.js
     window.addEventListener('board:move', (e) => {
         const { from, to } = e.detail;
         import('./game.js').then(g => g.makeMove(from, to));
@@ -112,7 +113,6 @@ function onPeerDisconnected() {
     if (state.isHost) {
         returnToWaiting();
     } else {
-        // Джойнер: мастер ушел, становимся новым мастером
         handleHostDisconnect();
     }
 }
@@ -153,7 +153,6 @@ export function handleIncomingData(data) {
         case 'move':
             state.game.move(data.move);
             
-            // Звук хода соперника
             if (state.game.in_check()) {
                 playCheck();
             } else if (data.move.captured) {
@@ -198,7 +197,6 @@ export function handleIncomingData(data) {
             dom.drawBtn.textContent = '🤝 Ничья';
             showToast('Соперник отклонил предложение ничьей');
             break;
-            
         
         case 'return_to_setup':
             returnToSetup(data.settings);
@@ -226,7 +224,6 @@ function onGameStart() {
     toggle(dom.setupScreen, false);
     toggle(dom.gameScreen, true);
     
-    // Цвета
     const oppColor = state.playerColor === 'w' ? 'b' : 'w';
     
     dom.myColorIndicator.className = `color-indicator ${state.playerColor === 'w' ? 'white' : 'black'}`;
@@ -234,11 +231,9 @@ function onGameStart() {
     dom.opponentColorIndicator.className = `color-indicator ${oppColor === 'w' ? 'white' : 'black'}`;
     dom.opponentColorText.textContent = oppColor === 'w' ? 'Белые' : 'Чёрные';
     
-    // Мастер
     toggle(dom.myMaster, state.isHost);
     toggle(dom.opponentMaster, !state.isHost);
     
-    // Часы
     if (state.settings.timeControl > 0) {
         state.whiteTime = state.settings.timeControl;
         state.blackTime = state.settings.timeControl;
@@ -260,9 +255,7 @@ export function checkGameOver() {
     state.gameOver = true;
     clearInterval(state.timerInterval);
     
-    // === ЗВУК ОКОНЧАНИЯ ИГРЫ ===
     playGameOver();
-    // ============================
     
     let result, reason;
     if (state.game.in_checkmate()) {
@@ -322,10 +315,8 @@ function endGameByDraw(reason) {
     state.gameOver = true;
     clearInterval(state.timerInterval);
     
-    import('./ui.js').then(ui => {
-        ui.showGameOverModal('draw', reason, state.isHost);
-        import('./sounds.js').then(s => s.playGameOver());
-    });
+    showGameOverModal('draw', reason, state.isHost);
+    playGameOver();
 }
 
 function initBeforeUnloadWarning() {
